@@ -1,6 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:location/location.dart' as loc;
+import 'package:geocoding/geocoding.dart';
+import 'dart:convert';
+import 'package:http_parser/http_parser.dart'; // for MediaType
+import 'dart:io';
 
 class PartyVerifyForm extends StatefulWidget {
   @override
@@ -9,71 +13,95 @@ class PartyVerifyForm extends StatefulWidget {
 
 class _PartyVerifyFormState extends State<PartyVerifyForm> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _auditPersonController = TextEditingController();
-  File? _partyPhoto;
-  File? _partyIdProof;
-  File? _homePhoto;
-  File? _streetPhoto;
-  File? _homeLftrPhoto;
-  File? _homeRhtrPhoto;
+  final TextEditingController _partyIdController = TextEditingController();
+  final TextEditingController _latitudeController = TextEditingController();
+  final TextEditingController _longitudeController = TextEditingController();
+  final TextEditingController _auditingPersonController = TextEditingController();
+  bool _isLocationFetched = false;
 
-  Future<void> _selectImage(ImageSource source, String imageType) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-    if (pickedFile != null) {
-      setState(() {
-        switch (imageType) {
-          case 'partyPhoto':
-            _partyPhoto = File(pickedFile.path);
-            break;
-          case 'partyIdProof':
-            _partyIdProof = File(pickedFile.path);
-            break;
-          case 'homePhoto':
-            _homePhoto = File(pickedFile.path);
-            break;
-          case 'streetPhoto':
-            _streetPhoto = File(pickedFile.path);
-            break;
-          case 'homeLftrPhoto':
-            _homeLftrPhoto = File(pickedFile.path);
-            break;
-          case 'homeRhtrPhoto':
-            _homeRhtrPhoto = File(pickedFile.path);
-            break;
-        }
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _fetchLocation();
   }
 
-  Future<void> _showImageSourceActionSheet(BuildContext context, String imageType) async {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: Icon(Icons.photo_library),
-                title: Text('Gallery'),
-                onTap: () {
-                  _selectImage(ImageSource.gallery, imageType);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.photo_camera),
-                title: Text('Camera'),
-                onTap: () {
-                  _selectImage(ImageSource.camera, imageType);
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  Future<void> _fetchLocation() async {
+    loc.Location location = new loc.Location();
+
+    bool _serviceEnabled;
+    loc.PermissionStatus _permissionGranted;
+    loc.LocationData _locationData;
+
+    _serviceEnabled = await location.serviceEnabled();
+    if (!_serviceEnabled) {
+      _serviceEnabled = await location.requestService();
+      if (!_serviceEnabled) {
+        return;
+      }
+    }
+
+    _permissionGranted = await location.hasPermission();
+    if (_permissionGranted == loc.PermissionStatus.denied) {
+      _permissionGranted = await location.requestPermission();
+      if (_permissionGranted != loc.PermissionStatus.granted) {
+        return;
+      }
+    }
+
+    _locationData = await location.getLocation();
+
+    setState(() {
+      _latitudeController.text = _locationData.latitude.toString();
+      _longitudeController.text = _locationData.longitude.toString();
+      _isLocationFetched = true;
+    });
+  }
+
+  Future<void> _submitPartyVerify() async {
+    if (!_formKey.currentState!.validate() || !_isLocationFetched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enable location services and fill in all fields.')),
+      );
+      return;
+    }
+
+    final String apiUrl = "https://finance2024.ingenious-technologies.com/financeapp/public/api/executive/party-verify";
+
+    var request = http.MultipartRequest('POST', Uri.parse(apiUrl))
+      ..fields['party_id'] = _partyIdController.text
+      ..fields['latitude'] = _latitudeController.text
+      ..fields['longitude'] = _longitudeController.text
+      ..fields['auditing_person'] = _auditingPersonController.text
+      ..files.add(await http.MultipartFile.fromPath(
+          'party_photo', 'path/to/party_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'party_id_proof', 'path/to/party_id_proof.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'home_photo', 'path/to/home_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'street_photo', 'path/to/street_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'home_lftr_photo', 'path/to/home_lftr_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'home_rhtr_photo', 'path/to/home_rhtr_photo.jpg',
+          contentType: MediaType('image', 'jpeg')));
+
+    var response = await request.send();
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Party verified successfully')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to verify party')),
+      );
+    }
   }
 
   @override
@@ -81,7 +109,6 @@ class _PartyVerifyFormState extends State<PartyVerifyForm> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Party Verify'),
-        backgroundColor: Theme.of(context).colorScheme.secondary,
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -89,34 +116,14 @@ class _PartyVerifyFormState extends State<PartyVerifyForm> {
           key: _formKey,
           child: ListView(
             children: <Widget>[
-              _buildTextField(_auditPersonController, 'Audit Person'),
-              _buildImageUploadBox('Party Photo', 'partyPhoto'),
-              _buildImageUploadBox('Party ID Proof', 'partyIdProof'),
-              _buildImageUploadBox('Home Photo', 'homePhoto'),
-              _buildImageUploadBox('Street Photo', 'streetPhoto'),
-              _buildImageUploadBox('Home LFTR Photo', 'homeLftrPhoto'),
-              _buildImageUploadBox('Home RHTR Photo', 'homeRhtrPhoto'),
+              _buildTextField(_partyIdController, 'Party ID'),
+              _buildTextField(_latitudeController, 'Latitude', readOnly: true),
+              _buildTextField(_longitudeController, 'Longitude', readOnly: true),
+              _buildTextField(_auditingPersonController, 'Auditing Person'),
               SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Form Submitted Successfully')),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.secondary,
-                  foregroundColor: Theme.of(context).primaryColor,
-                  padding: EdgeInsets.symmetric(vertical: 20.0, horizontal: 100.0),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15.0),
-                  ),
-                ),
-                child: Text(
-                  'Submit',
-                  style: TextStyle(fontSize: 18, color: Theme.of(context).primaryColor),
-                ),
+                onPressed: _submitPartyVerify,
+                child: Text('Submit'),
               ),
             ],
           ),
@@ -125,7 +132,7 @@ class _PartyVerifyFormState extends State<PartyVerifyForm> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label) {
+  Widget _buildTextField(TextEditingController controller, String label, {bool readOnly = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
@@ -139,6 +146,7 @@ class _PartyVerifyFormState extends State<PartyVerifyForm> {
             borderSide: BorderSide.none,
           ),
         ),
+        readOnly: readOnly,
         validator: (value) {
           if (value == null || value.isEmpty) {
             return 'Please enter $label';
@@ -147,78 +155,5 @@ class _PartyVerifyFormState extends State<PartyVerifyForm> {
         },
       ),
     );
-  }
-
-  Widget _buildImageUploadBox(String label, String imageType) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            style: TextStyle(fontSize: 16, color: Colors.black),
-          ),
-          SizedBox(height: 8.0),
-          GestureDetector(
-            onTap: () => _showImageSourceActionSheet(context, imageType),
-            child: Container(
-              height: 150,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(10),
-                color: Colors.grey[200],
-              ),
-              child: Center(
-                child: _getImageWidget(imageType),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _getImageWidget(String imageType) {
-    File? imageFile;
-    String text;
-    switch (imageType) {
-      case 'partyPhoto':
-        imageFile = _partyPhoto;
-        text = 'Tap to upload Photo';
-        break;
-      case 'partyIdProof':
-        imageFile = _partyIdProof;
-        text = 'Tap to upload ID Proof';
-        break;
-      case 'homePhoto':
-        imageFile = _homePhoto;
-        text = 'Tap to upload Home Photo';
-        break;
-      case 'streetPhoto':
-        imageFile = _streetPhoto;
-        text = 'Tap to upload Street Photo';
-        break;
-      case 'homeLftrPhoto':
-        imageFile = _homeLftrPhoto;
-        text = 'Tap to upload Left Photo';
-        break;
-      case 'homeRhtrPhoto':
-        imageFile = _homeRhtrPhoto;
-        text = 'Tap to upload Right Photo';
-        break;
-      default:
-        text = 'Tap to upload Image';
-    }
-    return imageFile == null
-        ? Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.add, size: 50, color: Colors.grey),
-        SizedBox(height: 10),
-        Text(text, style: TextStyle(color: Colors.grey)),
-      ],
-    )
-        : Image.file(imageFile, fit: BoxFit.cover, width: double.infinity, height: double.infinity);
   }
 }

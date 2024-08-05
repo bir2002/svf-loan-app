@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -13,6 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     final String apiUrl = "https://finance2024.ingenious-technologies.com/financeapp/public/api/executive/login";
+
     final response = await http.post(
       Uri.parse(apiUrl),
       headers: {"Content-Type": "application/json"},
@@ -22,10 +24,26 @@ class _LoginScreenState extends State<LoginScreen> {
       }),
     );
 
+    print("Response status: ${response.statusCode}");
+    print("Response body: ${response.body}");
+
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = json.decode(response.body);
-      print("Login successful: $data");
-      Navigator.pushReplacementNamed(context, '/home');
+      print("Parsed data: $data");
+      String? token = data['token'];
+
+      if (token != null && token.isNotEmpty) {
+        // Store the token
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('token', token);
+
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        print("Token is null or empty");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login failed. Please try again.')),
+        );
+      }
     } else {
       print("Login failed: ${response.body}");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -56,8 +74,8 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _usernameController,
                 decoration: InputDecoration(
-                  hintText: 'Email',
-                  prefixIcon: Icon(Icons.email, color: Theme.of(context).colorScheme.secondary),
+                  hintText: 'Username',
+                  prefixIcon: Icon(Icons.person, color: Theme.of(context).colorScheme.secondary),
                   filled: true,
                   fillColor: Colors.grey[200],
                   border: OutlineInputBorder(

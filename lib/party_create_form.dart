@@ -1,6 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:location/location.dart' as loc;
+import 'package:geocoding/geocoding.dart';
+import 'dart:convert';
+import 'package:http_parser/http_parser.dart'; // for MediaType
+import 'dart:io';
 
 class PartyCreateForm extends StatefulWidget {
   @override
@@ -9,74 +13,108 @@ class PartyCreateForm extends StatefulWidget {
 
 class _PartyCreateFormState extends State<PartyCreateForm> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _contactNoController = TextEditingController();
+  final TextEditingController _partyNameController = TextEditingController();
+  final TextEditingController _partyContactNoController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _occupationController = TextEditingController();
-  File? _partyPhoto;
-  File? _partyIdProof;
-  File? _homePhoto;
-  File? _streetPhoto;
-  File? _homeLftrPhoto;
-  File? _homeRhtrPhoto;
+  final TextEditingController _latitudeController = TextEditingController();
+  final TextEditingController _longitudeController = TextEditingController();
+  bool _isLocationFetched = false;
 
-  Future<void> _selectImage(ImageSource source, String imageType) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
-    if (pickedFile != null) {
-      setState(() {
-        switch (imageType) {
-          case 'partyPhoto':
-            _partyPhoto = File(pickedFile.path);
-            break;
-          case 'partyIdProof':
-            _partyIdProof = File(pickedFile.path);
-            break;
-          case 'homePhoto':
-            _homePhoto = File(pickedFile.path);
-            break;
-          case 'streetPhoto':
-            _streetPhoto = File(pickedFile.path);
-            break;
-          case 'homeLftrPhoto':
-            _homeLftrPhoto = File(pickedFile.path);
-            break;
-          case 'homeRhtrPhoto':
-            _homeRhtrPhoto = File(pickedFile.path);
-            break;
-        }
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _fetchLocation();
   }
 
-  Future<void> _showImageSourceActionSheet(BuildContext context, String imageType) async {
-    showModalBottomSheet(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: Icon(Icons.photo_library),
-                title: Text('Gallery'),
-                onTap: () {
-                  _selectImage(ImageSource.gallery, imageType);
-                  Navigator.of(context).pop();
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.photo_camera),
-                title: Text('Camera'),
-                onTap: () {
-                  _selectImage(ImageSource.camera, imageType);
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          ),
-        );
-      },
+  Future<void> _fetchLocation() async {
+    loc.Location location = new loc.Location();
+
+    bool _serviceEnabled;
+    loc.PermissionStatus _permissionGranted;
+    loc.LocationData _locationData;
+
+    _serviceEnabled = await location.serviceEnabled();
+    if (!_serviceEnabled) {
+      _serviceEnabled = await location.requestService();
+      if (!_serviceEnabled) {
+        return;
+      }
+    }
+
+    _permissionGranted = await location.hasPermission();
+    if (_permissionGranted == loc.PermissionStatus.denied) {
+      _permissionGranted = await location.requestPermission();
+      if (_permissionGranted != loc.PermissionStatus.granted) {
+        return;
+      }
+    }
+
+    _locationData = await location.getLocation();
+
+    setState(() {
+      _latitudeController.text = _locationData.latitude.toString();
+      _longitudeController.text = _locationData.longitude.toString();
+      _isLocationFetched = true;
+    });
+
+    List<Placemark> placemarks = await placemarkFromCoordinates(
+      _locationData.latitude!,
+      _locationData.longitude!,
     );
+
+    setState(() {
+      _addressController.text = placemarks.first.street!;
+    });
+  }
+
+  Future<void> _submitPartyCreate() async {
+    if (!_formKey.currentState!.validate() || !_isLocationFetched) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enable location services and fill in all fields.')),
+      );
+      return;
+    }
+
+    final String apiUrl = "https://finance2024.ingenious-technologies.com/financeapp/public/api/executive/party-create";
+
+    var request = http.MultipartRequest('POST', Uri.parse(apiUrl))
+      ..fields['party_name'] = _partyNameController.text
+      ..fields['party_contact_no'] = _partyContactNoController.text
+      ..fields['address'] = _addressController.text
+      ..fields['occupation'] = _occupationController.text
+      ..fields['latitude'] = _latitudeController.text
+      ..fields['longitude'] = _longitudeController.text
+      ..files.add(await http.MultipartFile.fromPath(
+          'party_photo', 'path/to/party_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'party_id_proof', 'path/to/party_id_proof.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'home_photo', 'path/to/home_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'street_photo', 'path/to/street_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'home_lftr_photo', 'path/to/home_lftr_photo.jpg',
+          contentType: MediaType('image', 'jpeg')))
+      ..files.add(await http.MultipartFile.fromPath(
+          'home_rhtr_photo', 'path/to/home_rhtr_photo.jpg',
+          contentType: MediaType('image', 'jpeg')));
+
+    var response = await request.send();
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Party created successfully')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create party')),
+      );
+    }
   }
 
   @override
@@ -84,7 +122,6 @@ class _PartyCreateFormState extends State<PartyCreateForm> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Party Create'),
-        backgroundColor: Theme.of(context).colorScheme.secondary,
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -92,37 +129,16 @@ class _PartyCreateFormState extends State<PartyCreateForm> {
           key: _formKey,
           child: ListView(
             children: <Widget>[
-              _buildTextField(_nameController, 'Party Name'),
-              _buildTextField(_contactNoController, 'Party Contact No'),
+              _buildTextField(_partyNameController, 'Party Name'),
+              _buildTextField(_partyContactNoController, 'Party Contact No'),
               _buildTextField(_addressController, 'Address'),
               _buildTextField(_occupationController, 'Occupation'),
-              _buildImageUploadBox('Party Photo', 'partyPhoto'),
-              _buildImageUploadBox('Party ID Proof', 'partyIdProof'),
-              _buildImageUploadBox('Home Photo', 'homePhoto'),
-              _buildImageUploadBox('Street Photo', 'streetPhoto'),
-              _buildImageUploadBox('Home LFTR Photo', 'homeLftrPhoto'),
-              _buildImageUploadBox('Home RHTR Photo', 'homeRhtrPhoto'),
+              _buildTextField(_latitudeController, 'Latitude', readOnly: true),
+              _buildTextField(_longitudeController, 'Longitude', readOnly: true),
               SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Form Submitted Successfully')),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.secondary,
-                  foregroundColor: Theme.of(context).primaryColor,
-                  padding: EdgeInsets.symmetric(vertical: 20.0, horizontal: 100.0),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15.0),
-                  ),
-                ),
-                child: Text(
-                  'Submit',
-                  style: TextStyle(fontSize: 18, color: Theme.of(context).primaryColor),
-                ),
+                onPressed: _submitPartyCreate,
+                child: Text('Submit'),
               ),
             ],
           ),
@@ -131,7 +147,7 @@ class _PartyCreateFormState extends State<PartyCreateForm> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label) {
+  Widget _buildTextField(TextEditingController controller, String label, {bool readOnly = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: TextFormField(
@@ -145,7 +161,7 @@ class _PartyCreateFormState extends State<PartyCreateForm> {
             borderSide: BorderSide.none,
           ),
         ),
-        keyboardType: label == 'Party Contact No' ? TextInputType.phone : TextInputType.text,
+        readOnly: readOnly,
         validator: (value) {
           if (value == null || value.isEmpty) {
             return 'Please enter $label';
@@ -154,78 +170,5 @@ class _PartyCreateFormState extends State<PartyCreateForm> {
         },
       ),
     );
-  }
-
-  Widget _buildImageUploadBox(String label, String imageType) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            style: TextStyle(fontSize: 16, color: Colors.black),
-          ),
-          SizedBox(height: 8.0),
-          GestureDetector(
-            onTap: () => _showImageSourceActionSheet(context, imageType),
-            child: Container(
-              height: 150,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(10),
-                color: Colors.grey[200],
-              ),
-              child: Center(
-                child: _getImageWidget(imageType),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _getImageWidget(String imageType) {
-    File? imageFile;
-    String text;
-    switch (imageType) {
-      case 'partyPhoto':
-        imageFile = _partyPhoto;
-        text = 'Tap to upload Photo';
-        break;
-      case 'partyIdProof':
-        imageFile = _partyIdProof;
-        text = 'Tap to upload ID Proof';
-        break;
-      case 'homePhoto':
-        imageFile = _homePhoto;
-        text = 'Tap to upload Home Photo';
-        break;
-      case 'streetPhoto':
-        imageFile = _streetPhoto;
-        text = 'Tap to upload Street Photo';
-        break;
-      case 'homeLftrPhoto':
-        imageFile = _homeLftrPhoto;
-        text = 'Tap to upload Left Photo';
-        break;
-      case 'homeRhtrPhoto':
-        imageFile = _homeRhtrPhoto;
-        text = 'Tap to upload Right Photo';
-        break;
-      default:
-        text = 'Tap to upload Image';
-    }
-    return imageFile == null
-        ? Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.add, size: 50, color: Colors.grey),
-        SizedBox(height: 10),
-        Text(text, style: TextStyle(color: Colors.grey)),
-      ],
-    )
-        : Image.file(imageFile, fit: BoxFit.cover, width: double.infinity, height: double.infinity);
   }
 }

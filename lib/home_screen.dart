@@ -5,7 +5,7 @@ import 'monthly_due_form.dart';
 import 'vehicle_due_form.dart';
 import 'get_task.dart';
 import 'party_create_form.dart';
-import 'party_verify_form.dart'; // Import the PartyVerifyForm screen
+import 'party_verify_form.dart';
 
 class HomeScreen extends StatelessWidget {
   @override
@@ -26,67 +26,68 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             SizedBox(height: 40),
-            GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 16.0,
-              mainAxisSpacing: 16.0,
-              shrinkWrap: true,
-              children: <Widget>[
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => PartyCreateForm()),
-                    );
-                  },
-                  child: _buildCard(context, 'Party Creation', FontAwesomeIcons.userPlus),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => PartyVerifyForm()),
-                    );
-                  },
-                  child: _buildCard(context, 'Party Verify', FontAwesomeIcons.userCheck),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => WeeklyDueForm()),
-                    );
-                  },
-                  child: _buildCard(context, 'Weekly Dues', FontAwesomeIcons.calendarWeek),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => MonthlyDueForm()),
-                    );
-                  },
-                  child: _buildCard(context, 'Monthly Dues', FontAwesomeIcons.calendarAlt),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => VehicleDueForm()),
-                    );
-                  },
-                  child: _buildCard(context, 'Vehicle Dues', FontAwesomeIcons.car),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => GetTask()),
-                    );
-                  },
-                  child: _buildCard(context, 'Get Task', FontAwesomeIcons.tasks),
-                ),
-              ],
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16.0,
+                mainAxisSpacing: 16.0,
+                children: <Widget>[
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => PartyCreateForm()),
+                      );
+                    },
+                    child: _buildCard(context, 'Party Creation', FontAwesomeIcons.userPlus),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => PartyVerifyForm()),
+                      );
+                    },
+                    child: _buildCard(context, 'Party Verify', FontAwesomeIcons.userCheck),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => WeeklyDueForm()),
+                      );
+                    },
+                    child: _buildCard(context, 'Weekly Dues', FontAwesomeIcons.calendarWeek),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => MonthlyDueForm()),
+                      );
+                    },
+                    child: _buildCard(context, 'Monthly Dues', FontAwesomeIcons.calendarAlt),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => VehicleDueForm()),
+                      );
+                    },
+                    child: _buildCard(context, 'Vehicle Dues', FontAwesomeIcons.car),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => GetTask()),
+                      );
+                    },
+                    child: _buildCard(context, 'Get Task', FontAwesomeIcons.tasks),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
